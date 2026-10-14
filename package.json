@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "capture": "node capture.mjs",
+    "image": "node render-image.mjs",
+    "video": "node render-video.mjs",
+    "capture": "node render-video.mjs",
     "studio": "python3 -m http.server 4173"
   },
   "dependencies": {

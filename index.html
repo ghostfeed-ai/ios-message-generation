@@ -237,6 +237,132 @@
       position: relative;
       left: 3px;
     }
+    /* Christina-style focus view: the full conversation exists, but only the
+       current line and the context above it are readable. */
+    body.focus-mode #compose-dock,
+    body.focus-mode #keyboard,
+    body.focus-mode #attachment-menu,
+    body.focus-mode #media-scrim,
+    body.focus-mode #photo-picker,
+    body.focus-mode #camera-flow,
+    body.focus-mode #staging-card {
+      display: none;
+    }
+    body.focus-mode #conversation {
+      bottom: 30px;
+      padding-bottom: 42px;
+    }
+    body.focus-mode .message-row {
+      animation: none;
+      transition: filter .16s ease-out, opacity .16s ease-out, transform .16s ease-out;
+    }
+    body.focus-mode .message-row.focus-future {
+      filter: blur(var(--future-message-blur, 9px));
+      opacity: .58;
+      transform: scale(.986);
+      pointer-events: none;
+    }
+    body.focus-mode .message-row.focus-current,
+    body.focus-mode .message-row.focus-past {
+      filter: none;
+      opacity: 1;
+      transform: scale(1);
+    }
+    body.focus-mode .receipt {
+      display: none;
+    }
+    /* Full-screen progressive reveal: every chat bubble exists from frame one,
+       but the unrevealed future stays soft until its spoken line begins. */
+    body.progressive-blur-mode #compose-dock,
+    body.progressive-blur-mode #keyboard,
+    body.progressive-blur-mode #attachment-menu,
+    body.progressive-blur-mode #media-scrim,
+    body.progressive-blur-mode #photo-picker,
+    body.progressive-blur-mode #camera-flow,
+    body.progressive-blur-mode #staging-card {
+      display: none;
+    }
+    body.progressive-blur-mode #conversation {
+      bottom: 30px;
+      padding-bottom: 42px;
+    }
+    body.progressive-blur-mode .message-row {
+      animation: none;
+      transition: none;
+    }
+    body.progressive-blur-mode .message-row.progressive-blur {
+      filter: blur(var(--future-message-blur, 12px));
+      opacity: .44;
+      transform: scale(.985);
+      pointer-events: none;
+    }
+    body.progressive-blur-mode .message-row.progressive-clear {
+      filter: none;
+      opacity: 1;
+      transform: scale(1);
+    }
+    body.progressive-blur-mode .message-row.progressive-hidden {
+      display: none !important;
+    }
+    body.progressive-blur-mode .receipt {
+      display: none;
+    }
+    /* Compact lyric mode is a centered phone crop, not a full chat history. */
+    body.compact-lyric-mode {
+      background: #000;
+    }
+    body.compact-lyric-mode #camera {
+      top: 315px;
+      right: 18px;
+      bottom: auto;
+      left: 18px;
+      height: 650px;
+      border-radius: 36px;
+      transform: none !important;
+    }
+    body.compact-lyric-mode #conversation {
+      inset: 184px 0 0;
+      display: block;
+      overflow: hidden;
+      padding: 24px 26px 22px;
+    }
+    body.compact-lyric-mode .day-label {
+      display: none;
+    }
+    body.compact-lyric-mode .message-row {
+      position: absolute;
+      left: 26px;
+      right: 26px;
+      top: 24px;
+      width: auto;
+      margin: 0;
+      transform: none !important;
+      transform-origin: 50% 50%;
+    }
+    body.compact-lyric-mode .message-row.sent {
+      align-items: flex-end;
+      right: 26px;
+    }
+    body.compact-lyric-mode .message-row.compact-next {
+      filter: blur(var(--future-message-blur, 7px));
+      opacity: .5;
+      transform: scale(.99) !important;
+    }
+    body.compact-lyric-mode .message-row.compact-current {
+      display: flex !important;
+      filter: none;
+      opacity: 1;
+      transform: none !important;
+    }
+    body.compact-lyric-mode .message-row.compact-next {
+      display: flex !important;
+    }
+    body.compact-lyric-mode .message-row.compact-hidden {
+      display: none !important;
+    }
+    body.compact-lyric-mode .home-indicator {
+      display: none;
+    }
     .message-row.grouped { margin-top: 0; }
     .message-row.sent + .message-row.received,
     .message-row.sent + .message-row.typing,
@@ -1285,6 +1411,18 @@
       charactersPerSecond: 12.3
     };
     const story = window.__CHAT_STORY__ ?? defaultStory;
+    const focusMode = story.focusMode === true || story.focusMode?.enabled === true;
+    const compactLyricMode = story.compactLyricMode === true || story.compactLyricMode?.enabled === true;
+    const progressiveBlurMode = story.progressiveBlurMode === true || story.progressiveBlurMode?.enabled === true;
+    const focusFutureBlur = Number.isFinite(story.focusMode?.futureBlur)
+      ? story.focusMode.futureBlur
+      : 9;
+    if (focusMode || compactLyricMode || progressiveBlurMode) {
+      document.body.classList.add("focus-mode");
+      document.documentElement.style.setProperty("--future-message-blur", `${focusFutureBlur}px`);
+    }
+    if (compactLyricMode) document.body.classList.add("compact-lyric-mode");
+    if (progressiveBlurMode) document.body.classList.add("progressive-blur-mode");
     const StoryImageSources = [
       story.avatarImage,
       ...(story.photoLibrary ?? []).map(Item =>
@@ -1443,6 +1581,7 @@
     });
     window.__renderDuration = cursor + .75;
     window.__soundSchedule = schedule.map(({ index, soundStart }) => ({ index, soundStart }));
+    window.__renderSchedule = schedule.map(({ phaseStart }) => ({ phaseStart }));
 
     const escapeHtml = (value) => String(value).replace(/[&<>"']/g, char => ({
       "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;"
@@ -1765,6 +1904,7 @@
     };
 
     const mountTyping = () => {
+      if (focusMode || compactLyricMode || progressiveBlurMode) return;
       if (typingNode) return;
       typingNode = document.createElement("div");
       typingNode.className = "message-row typing";
@@ -1776,6 +1916,77 @@
     const removeTyping = () => {
       typingNode?.remove();
       typingNode = null;
+    };
+
+    const updateFocusMessages = (elapsed) => {
+      if (!focusMode) return;
+      const activeEvent = schedule.find(event =>
+        elapsed >= event.phaseStart && elapsed < event.reveal
+      );
+      const latestRevealed = [...schedule]
+        .reverse()
+        .find(event => elapsed >= event.reveal);
+      const focusedIndex = activeEvent?.index ?? latestRevealed?.index ?? 0;
+      conversation.querySelectorAll(".message-row[data-index]").forEach(row => {
+        const index = Number(row.dataset.index);
+        row.classList.toggle("focus-past", index < focusedIndex);
+        row.classList.toggle("focus-current", index === focusedIndex);
+        row.classList.toggle("focus-future", index > focusedIndex);
+      });
+      const focusedRow = conversation.querySelector(`.message-row[data-index="${focusedIndex}"]`);
+      if (!focusedRow) return;
+      const targetScroll = Math.max(
+        0,
+        focusedRow.offsetTop - (conversation.clientHeight * .35)
+      );
+      conversation.scrollTop += (targetScroll - conversation.scrollTop) * .2;
+    };
+
+    const updateCompactLyricMessages = (elapsed) => {
+      if (!compactLyricMode) return;
+      const currentEvent = schedule.find(event =>
+        elapsed >= event.phaseStart && elapsed < event.reveal + event.holdDuration
+      ) ?? (elapsed >= schedule.at(-1)?.phaseStart ? schedule.at(-1) : null);
+      const currentIndex = currentEvent?.index;
+      conversation.querySelectorAll(".message-row[data-index]").forEach(row => {
+        const index = Number(row.dataset.index);
+        row.classList.toggle("compact-current", index === currentIndex);
+        row.classList.toggle("compact-next", currentIndex !== undefined && index === currentIndex + 1);
+        row.classList.toggle("compact-hidden", index !== currentIndex && index !== currentIndex + 1);
+      });
+      const CurrentRow = conversation.querySelector(`.message-row[data-index="${currentIndex}"]`);
+      const NextRow = conversation.querySelector(`.message-row[data-index="${currentIndex + 1}"]`);
+      if (CurrentRow) CurrentRow.style.top = "24px";
+      if (CurrentRow && NextRow) {
+        NextRow.style.top = `${24 + CurrentRow.getBoundingClientRect().height + 30}px`;
+      }
+    };
+
+    const updateProgressiveBlurMessages = (elapsed) => {
+      if (!progressiveBlurMode) return;
+      const currentEvent = [...schedule]
+        .reverse()
+        .find(event => elapsed >= event.phaseStart) ?? schedule[0];
+      const currentIndex = currentEvent?.index ?? 0;
+      const WindowStart = Math.max(0, currentIndex - 2);
+      const WindowEnd = currentIndex + 2;
+      const UnblurDuration = story.progressiveUnblurDuration ?? .22;
+      conversation.querySelectorAll(".message-row[data-index]").forEach(row => {
+        const index = Number(row.dataset.index);
+        const Visible = index >= WindowStart && index <= WindowEnd;
+        const IsCurrent = index === currentIndex;
+        const IsPast = index < currentIndex;
+        const Progress = IsCurrent
+          ? (UnblurDuration <= 0 ? 1 : clamp01((elapsed - currentEvent.phaseStart) / UnblurDuration))
+          : (IsPast ? 1 : 0);
+        row.classList.toggle("progressive-hidden", !Visible);
+        row.classList.toggle("progressive-clear", IsPast);
+        row.classList.toggle("progressive-blur", !IsPast);
+        row.style.filter = `blur(${(1 - Progress) * (story.focusMode?.futureBlur ?? 12)}px)`;
+        row.style.opacity = String(.44 + (.56 * Progress));
+        row.style.transform = `scale(${.985 + (.015 * Progress)})`;
+      });
+      conversation.scrollTop = 0;
     };
 
     const updatePredictions = (text) => {
@@ -1956,23 +2167,42 @@
       });
       photoFly.style.visibility = FlyVisible ? "visible" : "hidden";
     };
+    const ClockChanges = (story.timeChanges ?? [])
+      .map(Change => ({
+        ...Change,
+        phaseStart: schedule[Change.messageIndex]?.phaseStart,
+      }))
+      .filter(Change => Number.isFinite(Change.phaseStart))
+      .sort((Left, Right) => Left.phaseStart - Right.phaseStart);
     const render = (now) => {
       const elapsed = (now - startedAt) / 1000;
-      if (story.statusTimeAfter && Number.isFinite(story.statusTimeChangeAt)) {
-        const CurrentStatusTime =
+      const CurrentClockChange = [...ClockChanges]
+        .reverse()
+        .find(Change => elapsed >= Change.phaseStart);
+      const CurrentStatusTime = CurrentClockChange?.statusTime ?? story.statusTime;
+      const CurrentConversationTime = CurrentClockChange?.conversationTime ?? story.conversationTime;
+      document.querySelector("#status-time").textContent = CurrentStatusTime;
+      document.querySelector("[data-camera-time]").textContent = CurrentStatusTime;
+      document.querySelector("#conversation-time").textContent = CurrentConversationTime;
+      if (!ClockChanges.length && story.statusTimeAfter && Number.isFinite(story.statusTimeChangeAt)) {
+        const LegacyStatusTime =
           elapsed >= story.statusTimeChangeAt ? story.statusTimeAfter : story.statusTime;
-        document.querySelector("#status-time").textContent = CurrentStatusTime;
-        document.querySelector("[data-camera-time]").textContent = CurrentStatusTime;
+        document.querySelector("#status-time").textContent = LegacyStatusTime;
+        document.querySelector("[data-camera-time]").textContent = LegacyStatusTime;
       }
       const active = schedule.find(event => elapsed >= event.phaseStart && elapsed < event.reveal);
-      schedule.filter(event => elapsed >= event.reveal).forEach(mountMessage);
-      schedule
-        .filter(event =>
-          event.kind === "image"
-          && event.sendVia === "camera"
-          && event.mediaPhases
-          && elapsed >= event.mediaPhases.sendStart)
-        .forEach(mountMessage);
+      if (focusMode || compactLyricMode || progressiveBlurMode) {
+        schedule.forEach(mountMessage);
+      } else {
+        schedule.filter(event => elapsed >= event.reveal).forEach(mountMessage);
+        schedule
+          .filter(event =>
+            event.kind === "image"
+            && event.sendVia === "camera"
+            && event.mediaPhases
+            && elapsed >= event.mediaPhases.sendStart)
+          .forEach(mountMessage);
+      }
       updateCameraGenie(elapsed);
 
       const activeText = active?.kind === "text" ? active : null;
@@ -1984,7 +2214,7 @@
         const ClampedProgress = Math.max(0, Math.min(1, progress));
         return 1 - Math.pow(1 - ClampedProgress, 3);
       };
-      const keyboardProgress = schedule
+      const keyboardProgress = (focusMode || compactLyricMode || progressiveBlurMode) ? 0 : schedule
         .filter(event => event.kind === "text" && event.side === "sent")
         .reduce((MaximumProgress, event) => {
           const OpenProgress = easeKeyboard((elapsed - event.phaseStart) / KeyboardTransition);
@@ -1993,12 +2223,16 @@
           return Math.max(MaximumProgress, Math.min(OpenProgress, CloseProgress));
         }, 0);
       const keyboardVisible = keyboardProgress > .001;
-      const { pickerProgress, stageProgress } = renderMediaUi(elapsed, activeMedia);
+      const { pickerProgress, stageProgress } = (focusMode || compactLyricMode || progressiveBlurMode)
+        ? { pickerProgress: 0, stageProgress: 0 }
+        : renderMediaUi(elapsed, activeMedia);
       const DockBottom = 48 + Math.max(425 * keyboardProgress, 545 * pickerProgress);
-      conversation.style.bottom = `${DockBottom + 74 + (316 * stageProgress)}px`;
-      composeDock.style.bottom = `${DockBottom}px`;
-      stagingCard.style.bottom = `${DockBottom + 3}px`;
-      keyboard.style.bottom = `${-461 + (461 * keyboardProgress)}px`;
+      if (!focusMode && !compactLyricMode && !progressiveBlurMode) {
+        conversation.style.bottom = `${DockBottom + 74 + (316 * stageProgress)}px`;
+        composeDock.style.bottom = `${DockBottom}px`;
+        stagingCard.style.bottom = `${DockBottom + 3}px`;
+        keyboard.style.bottom = `${-461 + (461 * keyboardProgress)}px`;
+      }
       if (activeText?.side === "received") mountTyping();
       else removeTyping();
       updateTailGrouping();
@@ -2063,7 +2297,10 @@
         receipt.textContent = elapsed >= SwapTime ? `Read ${story.readTime}` : "Delivered";
       });
 
-      conversation.scrollTop = conversation.scrollHeight;
+      if (compactLyricMode) updateCompactLyricMessages(elapsed);
+      else if (progressiveBlurMode) updateProgressiveBlurMessages(elapsed);
+      else if (focusMode) updateFocusMessages(elapsed);
+      else conversation.scrollTop = conversation.scrollHeight;
       const latestReveal = [...schedule].reverse().find(event => elapsed >= event.reveal);
       const sinceReveal = latestReveal ? elapsed - latestReveal.reveal : 99;
       const zoomStrength = story.cameraZoom && !keyboardVisible && sinceReveal >= 0 && sinceReveal < .65

@@ -1,10 +1,18 @@
 # iOS Message Generation
 
-A deterministic video renderer for light-mode, iOS-style Messages
-conversations. Stories are JSON files; the renderer produces a frame-perfect
-H.264 MP4 with optional message sounds.
+A deterministic renderer for light-mode, iOS-style Messages conversations.
+Stories are JSON files; one renderer page (`index.html`) draws the phone screen,
+and two thin entry points turn it into either output:
 
-The current renderer supports:
+| Output | Script | What it does |
+| --- | --- | --- |
+| **Image** (PNG) | `render-image.mjs` | Renders the story once at a single moment (default: the finished conversation) and screenshots it. |
+| **Video** (MP4) | `render-video.mjs` | Screenshots every frame at 30 fps, encodes H.264 with ffmpeg, and mixes in message sounds. |
+
+Both share `lib/renderer.mjs` (story loading, validation, headless Chrome).
+`capture.mjs` is kept as an alias for `render-video.mjs`.
+
+The renderer supports:
 
 - sent and received text bubbles;
 - typing indicators and the iOS keyboard;
@@ -12,7 +20,9 @@ The current renderer supports:
 - the Messages attachment menu;
 - inline Photos selection and photo messages;
 - a full-screen Camera capture/review/send flow;
-- configurable timing, viewport, status bar, contact, and sound settings;
+- focus, progressive-blur and compact-lyric reading modes;
+- mid-conversation clock changes (`timeChanges`);
+- configurable timing, viewport, status bar, battery, contact, and sound settings;
 - deterministic, frame-by-frame rendering at 30 fps.
 
 No personal conversation, personal photo-library asset, or supplied screen
@@ -20,14 +30,12 @@ recording is included in this repository.
 
 ## Requirements
 
-- macOS
 - Node.js 18 or newer
 - pnpm
-- Google Chrome installed at `/Applications/Google Chrome.app`
-- `ffmpeg` available on `PATH`
-
-The optional message audio uses the macOS Messages system sounds. Set
-`sounds.enabled` to `false` in a story when rendering without them.
+- Google Chrome. The default path is `/Applications/Google Chrome.app`; set
+  `CHROME_PATH` to use another install.
+- Video only: macOS and `ffmpeg` on `PATH`. The message sounds use the macOS
+  Messages system sounds; set `sounds.enabled` to `false` to render without them.
 
 ## Install
 
@@ -35,23 +43,34 @@ The optional message audio uses the macOS Messages system sounds. Set
 pnpm install
 ```
 
-## Render the media demo
+## Images
 
 ```bash
-pnpm capture
+pnpm image -- --story story-folk-bill.json --output folk-bill.png
 ```
 
-With no arguments, the command renders `story-media.json` to
-`output/ios26-imessage-proof.mp4`.
+Writes `output/folk-bill.png`. Options:
 
-To choose a story and output filename:
+- `--scale 2` (or `3`) renders at retina resolution, e.g. 1440×2560 for the
+  default 720×1280 viewport.
+- `--at 4.5` captures the screen at 4.5 seconds into the timeline instead of
+  the finished conversation (useful for mid-typing or keyboard-up shots).
+
+Timing fields in the story (`gap`, `typingDuration`, sounds, …) are ignored for
+images except to decide what is on screen at `--at`.
+
+## Video
 
 ```bash
-pnpm capture -- --story story-folk.json --output folk-sushi-imessage.mp4
+pnpm video -- --story story-folk.json --output folk-sushi-imessage.mp4
 ```
 
-The output filename must end in `.mp4` and contain only letters, numbers,
-periods, underscores, or hyphens.
+With no arguments, renders `story-media.json` to
+`output/ios26-imessage-proof.mp4`. Add `--sparse` to capture only the frames
+where something changes; it is much faster for text-only stories.
+
+The output filename must end in `.png` / `.mp4` and contain only letters,
+numbers, periods, underscores, or hyphens.
 
 ## Preview studio
 
